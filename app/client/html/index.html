@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Flask App{% endblock %}
+
+{% block content %}
+<div class="container">
+	<div class="hero">
+		<h1>Welcome to Flask App</h1>
+		<p>A simple and elegant Flask web application</p>
+		<button class="cta-button" onclick="showMessage()">Get Started</button>
+	</div>
+	
+	<div class="features">
+		<div class="feature-card">
+			<h3>Fast & Lightweight</h3>
+			<p>Built with Flask for optimal performance</p>
+		</div>
+		<div class="feature-card">
+			<h3>Responsive Design</h3>
+			<p>Looks great on all devices</p>
+		</div>
+		<div class="feature-card">
+			<h3>Easy to Customize</h3>
+			<p>Simple structure for easy modifications</p>
+		</div>
+	</div>
+</div>
+{% endblock %}
