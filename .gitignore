@@ -11,6 +11,7 @@
 !*.json
 !*.yaml
 !*.yml
+!*.env
 !Makefile
 !.gitignore
 
