@@ -6,77 +6,162 @@
 #    By: luzog78 <luzog78@gmail.com>                +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2025/08/14 11:18:35 by luzog78           #+#    #+#              #
-#    Updated: 2025/08/16 11:30:20 by luzog78          ###   ########.fr        #
+#    Updated: 2025/08/29 03:04:37 by luzog78          ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
 NAME		= Forty420
-MAIN		= app/main.py
+APP_DIR		= app/
+SERVER_DIR	= $(APP_DIR)server/
+CLIENT_DIR	= $(APP_DIR)client/
 
-PYTHON		= python3
-VENV		= .venv
+NPM			= npm
 
 ENV_PROD	= .env
 ENV_DEV		= .dev.env
 
-LOGS_ACCESS	= ./logs/gunicorn.access.log
-LOGS_ERROR	= ./logs/gunicorn.out.log
-LOGS_MAIN	= ./logs/gunicorn.main.log
-PID_FILE	= ./logs/gunicorn.pid
+LOGS_DIR	= logs/
+
+
+# ******************************************************************************
+
+
+APP_DIR		:= $(abspath $(APP_DIR))/
+SERVER_DIR	:= $(abspath $(SERVER_DIR))/
+CLIENT_DIR	:= $(abspath $(CLIENT_DIR))/
+LOGS_DIR	:= $(abspath $(LOGS_DIR))/
+
+dev_mode	= 0
+npm_args	= start
+
+
+.ONESHELL:
 
 
 all: $(NAME)
 
 
-init: $(VENV)/bin/python
-	$(VENV)/bin/pip install -r requirements.txt
+dev:
+	$(eval dev_mode = 1)
+	$(eval npm_args = run dev)
 
 
-$(VENV)/bin/python:
-	$(PYTHON) -m venv $(VENV)
-
-
-$(NAME): $(MAIN) init stop
-	mkdir -p $$(dirname $(LOGS_ACCESS)) $$(dirname $(LOGS_ERROR)) $$(dirname $(LOGS_MAIN)) $$(dirname $(PID_FILE))
-	export $$(grep -v '^#' $(ENV_PROD) | sed -e 's/^\([^=\t\r ]\+\)\s\+=\s\+/\1=/g' | xargs) \
-	&& nohup $(VENV)/bin/python -m gunicorn \
-		--bind 0.0.0.0:$${PORT:-5000} \
-		--workers $${WORKERS:-1} \
-		--pid $(PID_FILE) \
-		--access-logfile $(LOGS_ACCESS) \
-		--error-logfile $(LOGS_ERROR) \
-		--access-logformat '%(t)s %(p)s %(h)s %(u)s %(s)s %(m)s "%(U)s%(q)s" %(B)s %(M)s "%({Authorization}i)s" "%(f)s" "%(a)s"' \
-		--capture-output \
-		--pythonpath "$$(dirname "$(MAIN)")" \
-		"$$(basename "$(MAIN)" .py):app" \
-		> $(LOGS_MAIN) 2>&1 &
-
-
-stop:
-	@if [ -f $(PID_FILE) ]; then \
-		PID=$$(cat $(PID_FILE)); \
-		if kill -0 $$PID > /dev/null 2>&1; then \
-			echo "Stopping $(NAME) (PID: $$PID)..."; \
-			kill $$PID; \
-		else \
-			echo "$(NAME) is not running."; \
-		fi; \
-		rm -f $(PID_FILE); \
+define .env
+	@if [ "$(dev_mode)" -eq "1" ]; then \
+		echo "--> Using development environment variables from '$(ENV_DEV)'"; \
+		export $$(grep -v '^#' $(ENV_DEV) | sed -e 's/^\([^=\t\r ]\+\)\s\+=\s\+/\1=/g' | xargs); \
 	else \
-		echo "$(NAME) is not running."; \
+		echo "--> Using production environment variables from '$(ENV_PROD)'"; \
+		export $$(grep -v '^#' $(ENV_PROD) | sed -e 's/^\([^=\t\r ]\+\)\s\+=\s\+/\1=/g' | xargs); \
 	fi
+endef
 
 
-dev: $(MAIN) init
-	$(VENV)/bin/python $(MAIN) $(ENV_PROD) $(ENV_DEV)
+define exec
+	@echo "$$>$(1)"
+	@$(1)
+endef
 
 
-clean:
-	rm -rf $(VENV)
-	find . \( -type d -name "__pycache__" -o -type f -name "*.pyc" \) -exec rm -rf {} +
+client-install: $(CLIENT_DIR)/package.json
+	$(call exec, cd $(CLIENT_DIR))
+	$(call exec, $(NPM) install)
+
+
+client: client-install
+	$(call .env)
+	$(call exec, cd $(CLIENT_DIR))
+	$(call exec, $(NPM) run build)
+
+
+client-clean:
+	$(call exec, cd $(CLIENT_DIR))
+	$(call exec, rm -rf node_modules)
+	$(call exec, rm -f package-lock.json)
+	$(call exec, rm -rf build)
+
+
+server-install: $(SERVER_DIR)/package.json
+	$(call exec, cd $(SERVER_DIR))
+	$(call exec, $(NPM) install)
+
+
+server:
+	$(call .env)
+	$(call exec, cd $(SERVER_DIR))
+	$(call exec, $(NPM) $(npm_args))
+
+
+server-d:
+	$(call .env)
+	$(call exec, cd $(SERVER_DIR))
+	$(call exec, mkdir -p $(LOGS_DIR))
+	$(call exec, nohup $(NPM) $(npm_args) > $(LOGS_DIR)server.log 2>&1 &)
+
+
+server-stop:
+	$(call exec, pkill -f "node .*index.js" && echo "Server stopped." || echo "No server process found.")
+
+
+server-clean:
+	$(call exec, cd $(SERVER_DIR))
+	$(call exec, rm -rf node_modules)
+	$(call exec, rm -f package-lock.json)
+
+
+install: server-install client-install
+
+
+start: client server
+
+
+start-d: client server-d
+
+
+clean: server-clean client-clean
+
+
+fclean: clean
+	$(call exec, rm -rf $(LOGS_DIR))
+
+
+$(NAME): install start
+
+
+d: install start-d
+
+
+stop: server-stop
 
 
 re: stop clean all
 
 
-.PHONY: all init stop dev clean re
+help:
+	@echo "Makefile commands:"
+	@echo "  all            : Do \$$(NAME) ('$(NAME)')"
+	@echo "  dev            : Add dev mode flag (use with other commands)"
+	@echo
+	@echo "  client-install : Install client dependencies"
+	@echo "  client         : Build the client application"
+	@echo "  client-clean   : Remove client dependencies and build files"
+	@echo
+	@echo "  server-install : Install server dependencies"
+	@echo "  server         : Start the server"
+	@echo "  server-d       : Start the server in detached mode"
+	@echo "  server-stop    : Stop the server"
+	@echo "  server-clean   : Remove server dependencies"
+	@echo
+	@echo "  install        : Install both client and server dependencies (client-install & server-install)"
+	@echo "  start          : Start both client and server (client & server)"
+	@echo "  start-d        : Start both client and server in detached mode (client & server-d)"
+	@echo "  clean          : Clean both client and server (client-clean & server-clean)"
+	@echo "  fclean         : Full clean including logs"
+	@echo
+	@echo "  \$$(NAME)        : Full install and start (install & start)"
+	@echo "  d              : Full install and start in detached mode (install & start-d)"
+	@echo "  stop           : Stop the server (server-stop)"
+	@echo "  re             : Restart the entire application (stop & clean & all)"
+
+
+.PHONY: all dev client-install client client-clean server-install server server-d server-stop server-clean install start start-d clean fclean d stop re help
