@@ -6,7 +6,7 @@
 #    By: luzog78 <luzog78@gmail.com>                +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2025/08/14 11:18:35 by luzog78           #+#    #+#              #
-#    Updated: 2025/08/29 03:04:37 by luzog78          ###   ########.fr        #
+#    Updated: 2025/08/30 16:52:45 by luzog78          ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -58,7 +58,7 @@ endef
 
 
 define exec
-	@echo "$$>$(1)"
+	@echo '$$>$(1)'
 	@$(1)
 endef
 
@@ -68,10 +68,19 @@ client-install: $(CLIENT_DIR)/package.json
 	$(call exec, $(NPM) install)
 
 
-client: client-install
+client-build: client-install
 	$(call .env)
 	$(call exec, cd $(CLIENT_DIR))
 	$(call exec, $(NPM) run build)
+
+
+client:
+	$(call .env)
+	$(call exec, cd $(CLIENT_DIR))
+	$(call exec, export SERVER_PORT=$${PORT})
+	$(call exec, export PORT=$${CLIENT_PORT})
+	$(call exec, echo "Starting client on port $${PORT} and connecting to server on port $${SERVER_PORT}" )
+	$(call exec, $(NPM) run start)
 
 
 client-clean:
@@ -112,10 +121,10 @@ server-clean:
 install: server-install client-install
 
 
-start: client server
+start: client-build server
 
 
-start-d: client server-d
+start-d: client-build server-d
 
 
 clean: server-clean client-clean
@@ -143,7 +152,8 @@ help:
 	@echo "  dev            : Add dev mode flag (use with other commands)"
 	@echo
 	@echo "  client-install : Install client dependencies"
-	@echo "  client         : Build the client application"
+	@echo "  client-build   : Build the client application"
+	@echo "  client         : Start the client in development server (does not install nor build client)"
 	@echo "  client-clean   : Remove client dependencies and build files"
 	@echo
 	@echo "  server-install : Install server dependencies"
@@ -153,8 +163,8 @@ help:
 	@echo "  server-clean   : Remove server dependencies"
 	@echo
 	@echo "  install        : Install both client and server dependencies (client-install & server-install)"
-	@echo "  start          : Start both client and server (client & server)"
-	@echo "  start-d        : Start both client and server in detached mode (client & server-d)"
+	@echo "  start          : Start both client and server (client-build & server)"
+	@echo "  start-d        : Start both client and server in detached mode (client-build & server-d)"
 	@echo "  clean          : Clean both client and server (client-clean & server-clean)"
 	@echo "  fclean         : Full clean including logs"
 	@echo
@@ -164,4 +174,4 @@ help:
 	@echo "  re             : Restart the entire application (stop & clean & all)"
 
 
-.PHONY: all dev client-install client client-clean server-install server server-d server-stop server-clean install start start-d clean fclean d stop re help
+.PHONY: all dev client-install client-build client client-clean server-install server server-d server-stop server-clean install start start-d clean fclean d stop re help
