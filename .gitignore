@@ -6,6 +6,8 @@
 !*.css
 !*.js
 !*.jsx
+!*.mjs
+!*.cjs
 !*.py
 !*.txt
 !*.md

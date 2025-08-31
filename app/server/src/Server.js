@@ -65,7 +65,7 @@ export class Server {
 
 	setupStaticFiles() {
 		const __dirname = path.dirname(fileURLToPath(import.meta.url));
-		const clientBuildPath = path.join(__dirname, '..', '..', 'client', 'build');
+		const clientBuildPath = path.join(__dirname, '..', '..', 'client', 'dist');
 		this.app.use(express.static(clientBuildPath));
 		this.app.get('*', (req, res) => {
 			res.sendFile(path.join(clientBuildPath, 'index.html'));
@@ -122,7 +122,23 @@ export class Server {
 
 		console.log('[+]', `<${socket.id}>`, user, room);
 
-		socket.on('x:room:create', ({ roomName, maxUsers }, cb) => {
+		socket.on('disconnecting', (reason) => {
+			const user = User.getUserFromSocket(this, socket);
+			if (!user)
+				return;
+
+			user.disconnect(this, reason);
+		});
+
+		socket.on('disconnect', (reason) => {
+			const user = User.getUserFromSocket(this, socket);
+			if (user)
+				user.socket = null;
+
+			console.log('[-]', `<${socket.id}>`, user, reason);
+		});
+
+		socket.on('x:room:create', ({ roomName = null, maxUsers = null }, cb) => {
 			if(Room.getRoomFromSocket(this, socket))
 				return cb && cb({ error: 'Already in a room' });
 
@@ -143,7 +159,7 @@ export class Server {
 			cb && cb({ ok: true, uid: user.id, rid: room.id });
 		});
 
-		socket.on('x:room:join', ({ rid, userName }, cb) => {
+		socket.on('x:room:join', ({ rid = null, userName = null }, cb) => {
 			if(Room.getRoomFromSocket(this, socket))
 				return cb && cb({ error: 'Already in a room' });
 
@@ -161,7 +177,7 @@ export class Server {
 			cb && cb({ ok: true });
 		});
 
-		socket.on('x:room:leave', ({ reason }, cb) => {
+		socket.on('x:room:leave', ({ reason = null }, cb) => {
 			const user = User.getUserFromSocket(this, socket);
 			const room = Room.getRoomFromUser(this, user);
 			if (!room)
@@ -174,7 +190,7 @@ export class Server {
 			cb && cb({ ok: true });
 		});
 
-		socket.on('x:user:rename', ({ userName }, cb) => {
+		socket.on('x:user:rename', ({ userName = null }, cb) => {
 			const user = User.getUserFromSocket(this, socket);
 			if (!user)
 				return cb && cb({ error: 'No such user' });
@@ -185,22 +201,6 @@ export class Server {
 			if (room)
 				room.broadcast([user], 'x:user:rename', { uid: user.id, name: user.name });
 			cb && cb({ ok: true, name: user.name });
-		});
-
-		socket.on('disconnecting', (reason) => {
-			const user = User.getUserFromSocket(this, socket);
-			if (!user)
-				return;
-
-			user.disconnect(this, reason);
-		});
-
-		socket.on('disconnect', (reason) => {
-			const user = User.getUserFromSocket(this, socket);
-			if (user)
-				user.socket = null;
-
-			console.log('[-]', `<${socket.id}>`, user, reason);
 		});
 	}
 
